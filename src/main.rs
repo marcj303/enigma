@@ -49,20 +49,20 @@ const _REFLECTOR_B: [char; 26] = [
 ];
 
 // Walze notch positions
-const _WALZE_1_NOTCH: u8 = ('Q' as u8) - ASCII_A;
-const _WALZE_2_NOTCH: u8 = ('E' as u8) - ASCII_A;
+const _WALZE_1_NOTCH: u8 = (b'Q') - ASCII_A;
+const _WALZE_2_NOTCH: u8 = (b'E') - ASCII_A;
 
 // ASCII 'A' = 65,
 const ASCII_A: u8 = 65;
 
 // Reflector (German: Umkehrwalze)
-fn reflector(i: &u8, umkehr: &Vec<u8>) -> u8 {
+fn reflector(i: &u8, umkehr: &[u8]) -> u8 {
     let w_pos: u8 = i % 26;
     umkehr[w_pos as usize]
 }
 
 /* Take a value and run it through the walze to get the next value */
-fn encode_plugboard(in_l: &u8, plugboard_values: &Vec<[u8; 2]>) -> u8 {
+fn encode_plugboard(in_l: &u8, plugboard_values: &[[u8; 2]]) -> u8 {
     for plug in plugboard_values.iter() {
         if plug[0] == *in_l {
             return plug[1];
@@ -76,7 +76,7 @@ fn encode_plugboard(in_l: &u8, plugboard_values: &Vec<[u8; 2]>) -> u8 {
 }
 
 /* Take a value and run it through the walze to get the next value */
-fn encode_slot(in_l: &u8, ring_pos: &u8, walze: &Vec<u8>) -> u8 {
+fn encode_slot(in_l: &u8, ring_pos: &u8, walze: &[u8]) -> u8 {
     // TODO: This requires some explanation...Got this from example code, but I don't know
     // why/how this works with the ring_pos it increments the rotor and gets the value, but then
     // has to subtract. This works and matches encoding by all the enigma demos.
@@ -99,7 +99,7 @@ TODO: Make an Enigma Rust Method with machine settings in a struct with encode f
 */
 fn encrypt_decrypt(
     input_text: &str,
-    input_plugboard: &Vec<[char; 2]>,
+    input_plugboard: &[[char; 2]],
     _ring_setting: &str,
     _key_setting: &str,
     _rotor_order: &str,
@@ -196,32 +196,32 @@ fn encrypt_decrypt(
         );
 
         // Start with encoding through the plugboard, Steckerverbindungen (stecker)
-        *i = encode_plugboard(*&i, &plugboard_values);
+        *i = encode_plugboard(i, &plugboard_values);
 
         // encode through each rotor, through the reflector and back
-        *i = encode_slot(*&i, &rotor_pos_s1, &walze_s1);
+        *i = encode_slot(i, &rotor_pos_s1, &walze_s1);
         println!("slot1 {}", i);
 
-        *i = encode_slot(*&i, &rotor_pos_s2, &walze_s2);
+        *i = encode_slot(i, &rotor_pos_s2, &walze_s2);
         println!("slot2 {}", i);
 
-        *i = encode_slot(*&i, &rotor_pos_s3, &walze_s3);
+        *i = encode_slot(i, &rotor_pos_s3, &walze_s3);
         println!("slot3 {}", i,);
 
-        *i = reflector(*&i, &umkehr);
+        *i = reflector(i, &umkehr);
         println!("reflect {}", i);
 
-        *i = encode_slot(*&i, &rotor_pos_s3, &walze_s3_inv);
+        *i = encode_slot(i, &rotor_pos_s3, &walze_s3_inv);
         println!("slot3 {}", i);
 
-        *i = encode_slot(*&i, &rotor_pos_s2, &walze_s2_inv);
+        *i = encode_slot(i, &rotor_pos_s2, &walze_s2_inv);
         println!("slot2 {}", i);
 
-        *i = encode_slot(*&i, &rotor_pos_s1, &walze_s1_inv);
+        *i = encode_slot(i, &rotor_pos_s1, &walze_s1_inv);
         println!("slot1 {}", i);
 
         // End with encoding through the plugboard, Steckerverbindungen (stecker)
-        *i = encode_plugboard(*&i, &plugboard_values);
+        *i = encode_plugboard(i, &plugboard_values);
     }
     println!("{:?}", enc_buffer);
 
@@ -267,7 +267,7 @@ fn main() {
 
     // Do some cleanup and error checking. - Is there a better Rust way?
     // No spaces are allowed. Replace then with X (should we just remove them?)
-    clear_text = clear_text.replace(" ", "X"); // X was the normal way, expect the user to do this?
+    clear_text = clear_text.replace(' ', "X"); // X was the normal way, expect the user to do this?
     println!("clear_text: {}", clear_text);
 
     // Check for any no alphabetic, no numbers, punctuation, or spaces
