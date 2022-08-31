@@ -9,6 +9,7 @@ use std::str;
 /* Enigma rotors are called walzenlage (walze). They are constants. There are up to 8 walze available, but
   only 3 are used at a time. Lets start with 3 and work up from there.
   Each walze has two arrays. The walze encode and the inverse for the return from the reflector.
+  TODO: We could do the inverse programmatically.
   TODO: Move to a different file? Do we need a module? what is the rust way?
 
   Note some walze are numbered 1->26 not A->Z. We can handle this conversion later.
@@ -86,32 +87,53 @@ fn encode_slot(in_l: &u8, ring_pos: &u8, walze: &Vec<u8>) -> u8 {
     ((walze[w_pos as usize] + 26) - ring_pos) % 26 // cast to usize to get array offset
 }
 
-/* Enigma is symmetric, so  encryption and decryption use the same function
+/* Enigma is symmetric, so encryption and decryption use the same function
 
-encrypt/decrypt takes a string slice (&str) and returns a String.  Since this is
-symmetric, we don't need to grow/shrink the string, so we use a string slice.
-
-We convert the slice to a byte array to make changing the characters easy. This requires that
-the input be ascii alphabetical only. This should be passed in correctly, but we will check one
-more time after we convert to the byte array.
+encrypt/decrypt takes a string slice (&str) and returns a String. We convert the slice to a byte array
+to make changing the characters easy. This requires that the input be ascii alphabetical only.
+This should be passed in correctly, but we will check one more time after we convert to the byte array.
 
 TODO: Use serde for this stuff, somehow?
-TODO: Make an enigma Method with machine settings in a struct and encode functions implemented, etc.
+TODO: Make an Enigma Rust Method with machine settings in a struct with encode functions implemented, etc.
       Then implement concurrency for each machine for brute force cracking.
 */
-fn encrypt_decrypt(input_text: &str, input_plugboard: &Vec<[char; 2]>) -> String {
+fn encrypt_decrypt(
+    input_text: &str,
+    input_plugboard: &Vec<[char; 2]>,
+    _ring_setting: &str,
+    _key_setting: &str,
+    _rotor_order: &str,
+) -> String {
+    /* Convert the input ASCII slice to a vector where each character will be encoded. */
     let mut enc_buffer: Vec<u8> = input_text.as_bytes().to_vec();
-    // Convert from ASCII value to 0==A, 1==B...25==Z
     for i in enc_buffer.iter_mut() {
-        *i -= ASCII_A;
+        *i -= ASCII_A; // 0==A, 1==B...25==Z
+        if *i > 25 {
+            // Should we just assume it is checked before passed in?
+            panic!("The input_text is not ASCII capital characters. Fix the input message.")
+        }
     }
 
-    /* Ringstellung is the ring setting of the walze. 1->A 2->B, etc */
-    let mut ring_pos_s1: u8 = 0;
-    let mut ring_pos_s2: u8 = 0;
-    let mut ring_pos_s3: u8 = 0;
+    /* Ringstellung is the ring setting of the walze. This shifts the ring wiring on the rotor */
+    // TODO Check that ring position is in bounds 0=25
+    let ring_pos_s1: u8 = 1;
+    let ring_pos_s2: u8 = 1;
+    let ring_pos_s3: u8 = 1;
 
-    //TODO - set arbitrary walze for each slot
+    /* Rotor Position (walze key) - Rotor Start position of the walze in the slot, 1->A 2->B, etc */
+    // TODO Check that rotor position is in bounds 0=25
+    let mut rotor_pos_s1: u8 = 1;
+    let mut rotor_pos_s2: u8 = 1;
+    let mut rotor_pos_s3: u8 = 1;
+
+    /* Apply the Ringstellung shift to the rotor position */
+    // TODO Fix for ring wrap around
+    rotor_pos_s1 -= ring_pos_s1;
+    rotor_pos_s2 -= ring_pos_s2;
+    rotor_pos_s3 -= ring_pos_s3;
+
+    // TODO - set arbitrary walze for each slot
+    // Convert the walze from ASCII array to vector of bytes 0==A, 1==B...25==Z
     let walze_s1: Vec<u8> = _WALZE_1
         .iter()
         .map(|c| (*c as u8) - ASCII_A)
@@ -141,7 +163,7 @@ fn encrypt_decrypt(input_text: &str, input_plugboard: &Vec<[char; 2]>) -> String
         .map(|c| (*c as u8) - ASCII_A)
         .collect::<Vec<_>>();
 
-    // Convert the ASCII to 0->25 values
+    // Convert the plugboard ASCII to 0->25 vector
     // Should this be array, vector, or slice? Build a hashmap? Might be overkill? Might be good for performance.
     let plugboard_values: Vec<[u8; 2]> = input_plugboard
         .iter()
@@ -156,40 +178,46 @@ fn encrypt_decrypt(input_text: &str, input_plugboard: &Vec<[char; 2]>) -> String
         // Increment the rotor for each character (key press), Ringstellung
         // Check the notch position to see if the middle and slow rotor need to increment.
         // TODO - This assumes the walze are I, II, III in slot fast, middle, slow slots
-        ring_pos_s1 = (ring_pos_s1 + 1) % 26;
+        rotor_pos_s1 = (rotor_pos_s1 + 1) % 26;
         // walze I in the fast slot, check notch position
-        if ring_pos_s1 == _WALZE_1_NOTCH {
-            ring_pos_s2 = (ring_pos_s2 + 1) % 26;
+        if rotor_pos_s1 == _WALZE_1_NOTCH {
+            rotor_pos_s2 = (rotor_pos_s2 + 1) % 26;
             // walze II in middle slot
-            if ring_pos_s2 == _WALZE_2_NOTCH {
-                ring_pos_s3 = (ring_pos_s3 + 1) % 26;
+            if rotor_pos_s2 == _WALZE_2_NOTCH {
+                rotor_pos_s3 = (rotor_pos_s3 + 1) % 26;
             }
+            // TODO When a rotor increments, it also increments the rotor to the right,
+            // so this means that the left rotor must increment the middle rotor. Note
+            // that the right rotor always increments, so it is fine.
         }
-        println!("ring_pos: {} {} {}", ring_pos_s3, ring_pos_s2, ring_pos_s1);
+        println!(
+            "rotor_pos: {} {} {}",
+            rotor_pos_s3, rotor_pos_s2, rotor_pos_s1
+        );
 
         // Start with encoding through the plugboard, Steckerverbindungen (stecker)
         *i = encode_plugboard(*&i, &plugboard_values);
 
         // encode through each rotor, through the reflector and back
-        *i = encode_slot(*&i, &ring_pos_s1, &walze_s1);
+        *i = encode_slot(*&i, &rotor_pos_s1, &walze_s1);
         println!("slot1 {}", i);
 
-        *i = encode_slot(*&i, &ring_pos_s2, &walze_s2);
+        *i = encode_slot(*&i, &rotor_pos_s2, &walze_s2);
         println!("slot2 {}", i);
 
-        *i = encode_slot(*&i, &ring_pos_s3, &walze_s3);
+        *i = encode_slot(*&i, &rotor_pos_s3, &walze_s3);
         println!("slot3 {}", i,);
 
         *i = reflector(*&i, &umkehr);
         println!("reflect {}", i);
 
-        *i = encode_slot(*&i, &ring_pos_s3, &walze_s3_inv);
+        *i = encode_slot(*&i, &rotor_pos_s3, &walze_s3_inv);
         println!("slot3 {}", i);
 
-        *i = encode_slot(*&i, &ring_pos_s2, &walze_s2_inv);
+        *i = encode_slot(*&i, &rotor_pos_s2, &walze_s2_inv);
         println!("slot2 {}", i);
 
-        *i = encode_slot(*&i, &ring_pos_s1, &walze_s1_inv);
+        *i = encode_slot(*&i, &rotor_pos_s1, &walze_s1_inv);
         println!("slot1 {}", i);
 
         // End with encoding through the plugboard, Steckerverbindungen (stecker)
@@ -209,7 +237,8 @@ fn encrypt_decrypt(input_text: &str, input_plugboard: &Vec<[char; 2]>) -> String
 }
 
 fn main() {
-    /*     for (a, w) in ('A'..='Z').zip(WALZE_1.iter()) {
+    /*     // Print out the walze arrays
+    for (a, w) in ('A'..='Z').zip(WALZE_1.iter()) {
         println!("WALZE 1: {},{} ", a, w);
     }
     for (a, w) in ('A'..='Z').zip(WALZE_2.iter()) {
@@ -220,36 +249,59 @@ fn main() {
     } */
 
     // TODO: Get clear text from command line or from a file.
-    // TODO: Check clear test string for chars that at not in the alphabet (no numbers or punctuation)
-
     let mut clear_text = String::from("ABCD");
     println!("clear_text: {}", clear_text);
 
+    /* Settings from the user */
+    // TODO check these for out of bounds values
+    let ring_setting = String::from("AAA"); // three alphabetic settings
+    let key_setting = String::from("AAA"); // three alphabetic settings
+    let rotor_order = String::from("321"); // three numeric settings each unique from 1-7
+
     /* Steckerverbindungen (stecker) are the plugboard settings */
     // TODO: Check that there are no repeat chars. Letters can only be mapped once.
+    // TODO: Check the size is >= 10 plugs
     let plugboard_setting: Vec<[char; 2]> =
         vec![['A', 'B'], ['C', 'D'], ['E', 'F'], ['M', 'N'], ['Q', 'R']];
     println!("{:?}", plugboard_setting);
 
-    // Do some cleanup and error checking.
+    // Do some cleanup and error checking. - Is there a better Rust way?
     // No spaces are allowed. Replace then with X (should we just remove them?)
-    clear_text = clear_text.replace(" ", "X");
+    clear_text = clear_text.replace(" ", "X"); // X was the normal way, expect the user to do this?
     println!("clear_text: {}", clear_text);
 
-    // Check for any no alphabetic, no numbers, punctuation, os spaces
-    assert!(clear_text.bytes().all(|c| c.is_ascii_alphabetic()));
+    // Check for any no alphabetic, no numbers, punctuation, or spaces
+    assert!(
+        clear_text.bytes().all(|c| c.is_ascii_alphabetic()),
+        "Message has non ASCII alphabetic characters. Please fix the input."
+    );
 
     // Make all uppercase (there is only one case)
     clear_text = clear_text.to_uppercase();
     println!("clear_text: {}", clear_text);
 
     //encrypt the clear_text
-    let encrypted_text: String = encrypt_decrypt(&clear_text, &plugboard_setting);
+    let encrypted_text: String = encrypt_decrypt(
+        &clear_text,
+        &plugboard_setting,
+        &ring_setting,
+        &key_setting,
+        &rotor_order,
+    );
     println!("encrypted_text: {}", encrypted_text);
 
     // Decrypt what we just encrypted
-    let decrypted_text: String = encrypt_decrypt(&encrypted_text, &plugboard_setting);
+    let decrypted_text: String = encrypt_decrypt(
+        &encrypted_text,
+        &plugboard_setting,
+        &ring_setting,
+        &key_setting,
+        &rotor_order,
+    );
     println!("decrypted_text: {}", decrypted_text);
-    assert!(clear_text == decrypted_text);
+    assert!(
+        clear_text == decrypted_text,
+        "Error: Message did not encrypt and decrypt back to the same message"
+    );
     println!("success");
 }
