@@ -3,6 +3,8 @@ Enigma encode/decode
 
 Enigma brute force
 */
+#![warn(clippy::pedantic)]
+
 use std::str;
 //use std::ascii::AsciiExt;
 
@@ -56,27 +58,27 @@ const _WALZE_2_NOTCH: u8 = (b'E') - ASCII_A;
 const ASCII_A: u8 = 65;
 
 // Reflector (German: Umkehrwalze)
-fn reflector(i: &u8, umkehr: &[u8]) -> u8 {
+fn reflector(i: u8, umkehr: &[u8]) -> u8 {
     let w_pos: u8 = i % 26;
     umkehr[w_pos as usize]
 }
 
 /* Take a value and run it through the walze to get the next value */
-fn encode_plugboard(in_l: &u8, plugboard_values: &[[u8; 2]]) -> u8 {
+fn encode_plugboard(in_l: u8, plugboard_values: &[[u8; 2]]) -> u8 {
     for plug in plugboard_values.iter() {
-        if plug[0] == *in_l {
+        if plug[0] == in_l {
             return plug[1];
-        } else if plug[1] == *in_l {
+        } else if plug[1] == in_l {
             return plug[0];
         }
     }
 
     // Return back the input if it didn't change. Maybe this should be an Option thingy in Rust.
-    *in_l
+    in_l
 }
 
 /* Take a value and run it through the walze to get the next value */
-fn encode_slot(in_l: &u8, ring_pos: &u8, walze: &[u8]) -> u8 {
+fn encode_slot(in_l: u8, ring_pos: u8, walze: &[u8]) -> u8 {
     // TODO: This requires some explanation...Got this from example code, but I don't know
     // why/how this works with the ring_pos it increments the rotor and gets the value, but then
     // has to subtract. This works and matches encoding by all the enigma demos.
@@ -106,12 +108,9 @@ fn encrypt_decrypt(
 ) -> String {
     /* Convert the input ASCII slice to a vector where each character will be encoded. */
     let mut enc_buffer: Vec<u8> = input_text.as_bytes().to_vec();
-    for i in enc_buffer.iter_mut() {
+    for i in &mut enc_buffer {
         *i -= ASCII_A; // 0==A, 1==B...25==Z
-        if *i > 25 {
-            // Should we just assume it is checked before passed in?
-            panic!("The input_text is not ASCII capital characters. Fix the input message.")
-        }
+        assert!(*i <= 25, "The input_text is not ASCII capital characters. Fix the input message.");
     }
 
     /* Ringstellung is the ring setting of the walze. This shifts the ring wiring on the rotor */
@@ -174,7 +173,7 @@ fn encrypt_decrypt(
 
     // Encode each character in the buffer.
     // TODO - clean up the assumptions/hard-coded things noted below
-    for i in enc_buffer.iter_mut() {
+    for i in & mut enc_buffer {
         // Increment the rotor for each character (key press), Ringstellung
         // Check the notch position to see if the middle and slow rotor need to increment.
         // TODO - This assumes the walze are I, II, III in slot fast, middle, slow slots
@@ -196,38 +195,38 @@ fn encrypt_decrypt(
         );
 
         // Start with encoding through the plugboard, Steckerverbindungen (stecker)
-        *i = encode_plugboard(i, &plugboard_values);
+        *i = encode_plugboard(*i, &plugboard_values);
 
         // encode through each rotor, through the reflector and back
-        *i = encode_slot(i, &rotor_pos_s1, &walze_s1);
+        *i = encode_slot(*i, rotor_pos_s1, &walze_s1);
         println!("slot1 {}", i);
 
-        *i = encode_slot(i, &rotor_pos_s2, &walze_s2);
+        *i = encode_slot(*i, rotor_pos_s2, &walze_s2);
         println!("slot2 {}", i);
 
-        *i = encode_slot(i, &rotor_pos_s3, &walze_s3);
+        *i = encode_slot(*i, rotor_pos_s3, &walze_s3);
         println!("slot3 {}", i,);
 
-        *i = reflector(i, &umkehr);
+        *i = reflector(*i, &umkehr);
         println!("reflect {}", i);
 
-        *i = encode_slot(i, &rotor_pos_s3, &walze_s3_inv);
+        *i = encode_slot(*i, rotor_pos_s3, &walze_s3_inv);
         println!("slot3 {}", i);
 
-        *i = encode_slot(i, &rotor_pos_s2, &walze_s2_inv);
+        *i = encode_slot(*i, rotor_pos_s2, &walze_s2_inv);
         println!("slot2 {}", i);
 
-        *i = encode_slot(i, &rotor_pos_s1, &walze_s1_inv);
+        *i = encode_slot(*i, rotor_pos_s1, &walze_s1_inv);
         println!("slot1 {}", i);
 
         // End with encoding through the plugboard, Steckerverbindungen (stecker)
-        *i = encode_plugboard(i, &plugboard_values);
+        *i = encode_plugboard(*i, &plugboard_values);
     }
     println!("{:?}", enc_buffer);
 
     // Convert back to ASCII value
     // a.iter_mut().for_each(|i| *i += 1); also would work.
-    for i in enc_buffer.iter_mut() {
+    for i in &mut enc_buffer {
         *i += ASCII_A;
     }
     println!("{:?}", enc_buffer);
@@ -249,7 +248,7 @@ fn main() {
     } */
 
     // TODO: Get clear text from command line or from a file.
-    let mut clear_text = String::from("ABCD");
+    let mut clear_text = String::from("ABYZ");
     println!("clear_text: {}", clear_text);
 
     /* Settings from the user */
